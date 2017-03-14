@@ -1879,10 +1879,6 @@ void Spell::EffectEnergize(SpellEffectIndex eff_idx)
             if (m_caster->getClass() == CLASS_ROGUE) // Warrior and rogue use same spell, on rogue not supposed to give resource, WTF blizzard
                 return;
             break;
-        case 9512:                                          // Restore Energy
-            level_diff = m_caster->getLevel() - 40;
-            level_multiplier = 2;
-            break;
         case 24571:                                         // Blood Fury
             level_diff = m_caster->getLevel() - 60;
             level_multiplier = 10;
