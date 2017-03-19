@@ -2450,7 +2450,8 @@ void Spell::EffectPickPocket(SpellEffectIndex /*eff_idx*/)
         }
         else
         {
-            // Reveal action + get attack
+            // Pickpocket attempt resisted. Reveal action and get attacked.
+            m_caster->SendSpellMiss(unitTarget, m_spellInfo->Id, SPELL_MISS_RESIST);
             m_caster->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
             unitTarget->AttackedBy(m_caster);
         }
