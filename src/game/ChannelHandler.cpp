@@ -77,6 +77,10 @@ void WorldSession::HandleChannelPasswordOpcode(WorldPacket& recvPacket)
 
     recvPacket >> pass;
 
+    // Prevent excessively long passwords being set on chat channels.
+    if (pass.length() > MAX_CHANNEL_PASS_STR)
+        return;
+
     if (ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
         if (Channel* chn = cMgr->GetChannel(channelname, _player))
             chn->Password(_player, pass.c_str());

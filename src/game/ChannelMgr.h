@@ -23,6 +23,9 @@
 #include "Channel.h"
 
 #include <map>
+#include <string>
+
+#define MAX_CHANNEL_PASS_STR 31
 
 class ChannelMgr
 {
