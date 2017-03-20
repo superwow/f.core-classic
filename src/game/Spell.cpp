@@ -4303,6 +4303,24 @@ SpellCastResult Spell::CheckCast(bool strict)
             if (target->IsImmuneToSpell(m_spellInfo, target == m_caster) && !target->hasUnitState(UNIT_STAT_ISOLATED))
                 return SPELL_FAILED_TARGET_AURASTATE;
 
+        // Backstab should only work when behind the target.
+        switch (m_spellInfo->Id)
+        {
+            case 7159:
+            case 8627:
+            case 15582:
+            case 15657:
+            case 22416:
+                if (target->HasInArc(M_PI_F, m_caster))
+                {
+                    SendInterrupted(2);
+                    return SPELL_FAILED_NOT_BEHIND;
+                }
+                break;
+            default:
+                break;
+        }
+
         // Must be behind the target.
         if (m_spellInfo->AttributesEx2 == SPELL_ATTR_EX2_FACING_TARGETS_BACK && m_spellInfo->HasAttribute(SPELL_ATTR_EX_FACING_TARGET) && target->HasInArc(M_PI_F, m_caster))
         {
