@@ -2510,9 +2510,7 @@ void Aura::HandleAuraModTotalThreat(bool apply, bool Real)
     if (!caster || !caster->isAlive())
         return;
 
-    float threatMod = apply ? float(m_modifier.m_amount) : float(-m_modifier.m_amount);
-
-    target->getHostileRefManager().threatAssist(caster, threatMod, GetSpellProto());
+    target->getHostileRefManager().threatAssist(caster, m_modifier.m_amount, GetSpellProto());
 }
 
 void Aura::HandleModTaunt(bool apply, bool Real)
