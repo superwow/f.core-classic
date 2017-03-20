@@ -389,9 +389,9 @@ bool Creature::UpdateEntry(uint32 Entry, Team team, const CreatureData* data /*=
         unitFlags |= UNIT_FLAG_IN_COMBAT;
 
     if (m_movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) && (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_HAVE_NO_SWIM_ANIMATION) == 0)
-        unitFlags |= UNIT_FLAG_UNK_15;
+        unitFlags |= UNIT_FLAG_USE_SWIM_ANIMATION;
     else
-        unitFlags &= ~UNIT_FLAG_UNK_15;
+        unitFlags &= ~UNIT_FLAG_USE_SWIM_ANIMATION;
 
     SetUInt32Value(UNIT_FIELD_FLAGS, unitFlags);
 
@@ -1833,6 +1833,14 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
 
     // only free creature
     if (GetCharmerOrOwnerGuid())
+        return false;
+
+    // No help from invisible creatures.
+    if (m_invisibilityMask)
+        return false;
+
+    // No help from evading creatures.
+    if (IsInEvadeMode())
         return false;
 
     // only from same creature faction
