@@ -298,7 +298,7 @@ struct boss_majordomoAI : public ScriptedAI
                     case 11:
                         DoCastSpellIfCan(m_creature, SPELL_SUMMON_RAGNAROS);
                         // TODO - Move along, this expects to be handled with mmaps
-                        m_creature->GetMotionMaster()->MovePoint(1, 831.079590f, -816.023193f, -229.023270f);
+                        m_creature->GetMotionMaster()->MovePoint(1, 839.1729f, -811.2748f, -229.5895f);
                         ++m_uiSpeech;
                         m_uiSpeechTimer = 7000;
                         break;
@@ -318,7 +318,7 @@ struct boss_majordomoAI : public ScriptedAI
                         // Summon Ragnaros
                         if (m_pInstance)
                             if (GameObject* pGo = m_pInstance->GetSingleGameObjectFromStorage(GO_LAVA_STEAM))
-                                m_creature->SummonCreature(NPC_RAGNAROS, pGo->GetPositionX(), pGo->GetPositionY(), pGo->GetPositionZ(), fmod(m_creature->GetOrientation() + M_PI, 2 * M_PI), TEMPSUMMON_TIMED_OOC_OR_DEAD_DESPAWN, 2 * HOUR * IN_MILLISECONDS);
+                                m_creature->SummonCreature(NPC_RAGNAROS, 842.237488f, -833.683105f, -231.916498f, M_PI + m_creature->GetAngle(842.237488f, -833.683105f), TEMPSUMMON_MANUAL_DESPAWN, 2 * HOUR * IN_MILLISECONDS);
                         ++m_uiSpeech;
                         m_uiSpeechTimer = 8700;
                         break;
