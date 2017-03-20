@@ -6141,11 +6141,19 @@ uint32 Unit::SpellDamageBonusDone(Unit* pVictim, SpellEntry const* spellProto, u
     DoneTotal = SpellBonusWithCoeffs(spellProto, DoneTotal, DoneAdvertisedBenefit, 0, damagetype, true);
 
     float tmpDamage = (int32(pdamage) + DoneTotal * int32(stack)) * DoneTotalMod;
+
     // apply spellmod to Done damage (flat and pct)
     if (Player* modOwner = GetSpellModOwner())
         modOwner->ApplySpellMod(spellProto->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
 
-    return tmpDamage > 0 ? uint32(tmpDamage) : 0;
+    int32 roundedValue = int32(tmpDamage);
+    if (tmpDamage != roundedValue)
+    {
+        // If the value is fractional, randomise rounding up or down.
+        roundedValue = (bool)urand(0, 1) ? ceil(tmpDamage) : floor(tmpDamage);
+    }
+
+    return roundedValue > 0 ? roundedValue : 0;
 }
 
 /**
@@ -7825,7 +7833,7 @@ int32 Unit::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProt
         }
     }
 
-    int32 value = basePoints;
+    float value = float(basePoints);
 
     // random damage
     if (comboDamage != 0.0f && unitPlayer && target && (target->GetObjectGuid() == unitPlayer->GetComboTargetGuid() || IsOnlySelfTargeting(spellProto)))
@@ -7842,10 +7850,19 @@ int32 Unit::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProt
                  spellProto->Effect[effect_index] != SPELL_EFFECT_KNOCK_BACK &&
                  !IsControlledByPlayer())
         {
-            value = int32(value * 0.25f * exp(getLevel() * (70 - spellProto->spellLevel) / 1000.0f));
+            value = value * 0.25f * exp(getLevel() * (70 - spellProto->spellLevel) / 1000.0f);
         }
     }
-    return value;
+
+    int32 roundedValue = int32(value);
+
+    if (value != roundedValue)
+    {
+        // If the value is fractional, randomise rounding up or down.
+        roundedValue = (bool)urand(0, 1) ? ceil(value) : floor(value);
+    }
+
+    return roundedValue;
 }
 
 DiminishingLevels Unit::GetDiminishing(DiminishingGroup group)
