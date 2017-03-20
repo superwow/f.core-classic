@@ -9223,9 +9223,16 @@ void Unit::SetFeignDeath(bool apply, ObjectGuid casterGuid /*= ObjectGuid()*/)
             // restore appropriate movement generator
             if (getVictim())
                 if (IsNonDungeonCritter())
-                    GetMotionMaster()->MoveFleeing(getVictim(), 0);
+                {
+                    StopMoving();
+                    GetMotionMaster()->MoveFleeing(getVictim(), 20);
+                    DeleteThreatList();
+                    CombatStop(true);
+                }
                 else
+                {
                     GetMotionMaster()->MoveChase(getVictim());
+                }
             else
                 GetMotionMaster()->Initialize();
         }
