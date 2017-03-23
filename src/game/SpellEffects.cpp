@@ -323,6 +323,9 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
                 // Shield Slam
                 else if (m_spellInfo->SpellIconID == 413 && m_spellInfo->SpellFamilyFlags & uint64(0x2000000))
                     damage += int32(m_caster->GetShieldBlockValue());
+                // Execute Trigger
+                else if (m_spellInfo->Id == 20647)
+                    m_caster->SetPower(POWER_RAGE, 0);
                 break;
             }
             case SPELLFAMILY_WARLOCK:
@@ -372,7 +375,21 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
             case SPELLFAMILY_HUNTER:
                 break;
             case SPELLFAMILY_PALADIN:
+            {
+                // Hammer of Wrath - receive a bonus from spell damage.
+                if (m_spellInfo->SpellIconID == 42)
+                {
+                    damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+                    damage = unitTarget->SpellDamageBonusTaken(m_caster, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+                }
+                // Judgement of Command - receive a bonus from spell damage.
+                else if (m_spellInfo->SpellIconID == 561)
+                {
+                    damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+                    damage = unitTarget->SpellDamageBonusTaken(m_caster, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+                }
                 break;
+            }
         }
 
         if (damage >= 0)
@@ -469,35 +486,46 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 {
                     if (unitTarget && m_CastItem)
                     {
-                        // These rates are hella random; someone feel free to correct them
-                        if (uint32 roll = urand(0, 99) < 3)                   // Whole party will grow
-                            m_caster->CastSpell(m_caster, 13004, TRIGGERED_OLD_TRIGGERED);
-                        else if (roll < 6)                                    // Whole party will shrink
-                            m_caster->CastSpell(m_caster, 13010, TRIGGERED_OLD_TRIGGERED);
-                        else if (roll < 9)                                    // Whole enemy 'team' will grow
-                            m_caster->CastSpell(unitTarget, 13004, TRIGGERED_OLD_TRIGGERED);
-                        else if (roll < 12)                                    // Whole enemy 'team' will shrink
-                            m_caster->CastSpell(unitTarget, 13010, TRIGGERED_OLD_TRIGGERED);
-                        else if (roll < 24)                                   // Caster will shrink
-                            m_caster->CastSpell(m_caster, 13003, TRIGGERED_OLD_TRIGGERED);
-                        else                                                  // Enemy target will shrink
-                            m_caster->CastSpell(unitTarget, 13003, TRIGGERED_OLD_TRIGGERED);
+                        uint32 roll = urand(0, 99);
+
+                        if (roll < 15)
+                            m_caster->CastSpell(m_caster, 13003, TRIGGERED_OLD_TRIGGERED);   // Caster will shrink.
+                        else if (roll >= 15 && roll < 25)
+                            m_caster->CastSpell(m_caster, 13004, TRIGGERED_OLD_TRIGGERED);   // Caster will grow.
+                        else if (roll >= 25 && roll < 45)
+                            m_caster->CastSpell(m_caster, 13010, TRIGGERED_OLD_TRIGGERED);   // Party will shrink.
+                        else if (roll >= 45 && roll < 55)
+                            m_caster->CastSpell(m_caster, 13004, TRIGGERED_OLD_TRIGGERED);   // Party will grow.
+                        else if (roll >= 55 && roll < 75)
+                            m_caster->CastSpell(unitTarget, 13010, TRIGGERED_OLD_TRIGGERED); // Enemy target/team will shrink.
+                        else if (roll >= 75 && roll < 85)
+                            m_caster->CastSpell(unitTarget, 13004, TRIGGERED_OLD_TRIGGERED); // Enemy target/team will grow.
+                        else if (roll >= 85 && roll < 95)
+                            m_caster->CastSpell(unitTarget, 13003, TRIGGERED_OLD_TRIGGERED); // Enemy target will shrink.
+                        else
+                        {
+                            SendCastResult(SPELL_FAILED_FIZZLE);
+                        }
                     }
 
                     return;
                 }
                 case 13120:                                 // Net-O-Matic
                 {
-                    if (unitTarget && m_CastItem)
-                    {
-                        uint32 roll = urand(0, 99);
-                        if (roll < 2)                           // 2% for 30 sec self root (off-like chance unknown)
-                            m_caster->CastSpell(unitTarget, 16566, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-                        else if (roll < 4)                      // 2% for 20 sec root, charge to target (off-like chance unknown)
-                            m_caster->CastSpell(unitTarget, 13119, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-                        else                                    // normal root
-                            m_caster->CastSpell(unitTarget, 13099, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-                    }
+                    if (!unitTarget || !m_CastItem)
+                        return;
+
+                    uint32 spell_id = 0;
+                    uint32 roll = urand(0, 99);
+
+                    if (roll < 10)                              // 10% for 30 seconds, self-root.
+                        spell_id = 16566;
+                    else if (roll >= 10 && roll < 20)           // 10% for 20 seconds, root target and charge at target.
+                        spell_id = 13119;
+                    else                                        // 80% for normal root target.
+                        spell_id = 13099;
+
+                    m_caster->CastSpell(unitTarget, spell_id, TRIGGERED_OLD_TRIGGERED, m_CastItem);
 
                     return;
                 }
