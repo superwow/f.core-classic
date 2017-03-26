@@ -577,7 +577,9 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
-                case 14185:                                 // Preparation Rogue
+                // Rogue: Preparation
+                // "When activated, this ability immediately finishes the cooldown on your other rogue Rogue abilities."
+                case 14185:
                 {
                     if (m_caster->GetTypeId() == TYPEID_PLAYER)
                     {
@@ -899,6 +901,31 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 {
                     if (unitTarget->GetTypeId() == TYPEID_UNIT && unitTarget->GetPowerType() == POWER_MANA)
                         m_caster->CastSpell(unitTarget, 25779, TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
+                // Nature's Bounty
+                // Spell is used by Druid Dungeon Set 1 and Dungeon Set 2.
+                case 27798:
+                {
+                    switch(unitTarget->GetPowerType())
+                    {
+                        case POWER_RAGE:
+                        {
+                            unitTarget->EnergizeBySpell(unitTarget, 27798, 10, POWER_RAGE);
+                            return;
+                        }
+                        case POWER_ENERGY:
+                        {
+                            unitTarget->EnergizeBySpell(unitTarget, 27798, 40, POWER_ENERGY);
+                            return;
+                        }
+                        case POWER_MANA:
+                        {
+                            unitTarget->EnergizeBySpell(unitTarget, 27798, 300, POWER_MANA);
+                            return;
+                        }
+                    }
 
                     return;
                 }
@@ -1228,6 +1255,73 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
         }
         case SPELLFAMILY_SHAMAN:
         {
+            // Rockbiter Weapon
+            if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000400000))
+            {
+                uint32 spell_id = 0;
+
+                switch (m_spellInfo->Id)
+                {
+                    case 8017: // Rank 1
+                    {
+                        spell_id = 36494;
+                        break;
+                    }
+                    case 8018: // Rank 2
+                    {
+                        spell_id = 36750;
+                        break;
+                    }
+                    case 8019: // Rank 3
+                    {
+                        spell_id = 36755;
+                        break;
+                    }
+                    case 10399: // Rank 4
+                    {
+                        spell_id = 36759;
+                        break;
+                    }
+                    case 16314: // Rank 5
+                    {
+                        spell_id = 36763;
+                        break;
+                    }
+                    case 16315: // Rank 6
+                    {
+                        spell_id = 36766;
+                        break;
+                    }
+                    case 16316: // Rank 7
+                    {
+                        spell_id = 36771;
+                        break;
+                    }
+                    default:
+                    {
+                        sLog.outError("Spell::EffectDummy: Spell %u not handled in Rockbiter Weapon.", m_spellInfo->Id);
+                        return;
+                    }
+                }
+
+                // REPLACE WITH FLAMETONGUE TEMPORARILY
+                if (m_CastItem)
+                {
+                    int32 bonusDamage = m_caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(m_spellInfo))
+                        + unitTarget->SpellBaseDamageBonusTaken(GetSpellSchoolMask(m_spellInfo));
+                    // Does Amplify Magic/Dampen Magic influence rockbiter? If not, the above addition must be removed.
+                    float weaponSpeed = float(m_CastItem->GetProto()->Delay) / IN_MILLISECONDS;
+                    bonusDamage = m_caster->SpellBonusWithCoeffs(m_spellInfo, bonusDamage, 0, 0, SPELL_DIRECT_DAMAGE, false); // apply spell coeff
+                    int32 totalDamage = (damage * 0.01 * weaponSpeed) + bonusDamage;
+
+                    m_caster->CastCustomSpell(unitTarget, spell_id, &totalDamage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, m_CastItem);
+                }
+                else
+                    sLog.outError("Spell::EffectDummy: spell %i requires cast Item", m_spellInfo->Id);
+
+                return;
+            }
+
             if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000200000)) // Flametongue Weapon Proc, Ranks
             {
                 if (m_CastItem)
@@ -1307,6 +1401,14 @@ void Spell::EffectTriggerSpell(SpellEffectIndex eff_idx)
     // special cases
     switch (triggered_spell_id)
     {
+        // Item [Scorpid Surprise] - Heals 294 damage over 21 seconds, assuming you don't bite down on a poison sac.
+        case 6411:
+        {
+            if (urand(0, 10))
+                return;
+
+            break;
+        }
         // Temporal Parasite Summon #2, special case because chance is set to 101% in DBC while description is 67%
         case 16630:
             if (urand(0, 100) < 67)
@@ -1428,6 +1530,59 @@ void Spell::EffectTriggerSpell(SpellEffectIndex eff_idx)
 
     caster->CastSpell(unitTarget, spellInfo, TRIGGERED_OLD_TRIGGERED, m_CastItem, nullptr, m_originalCasterGUID, m_spellInfo);
 }
+
+
+uint32 GetPoisonCharges(uint32 spellId)
+{
+    switch (spellId)
+    {
+        // Instant Poison
+        case 8679:
+            return 40;
+        case 8686:
+            return 55;
+        case 8688:
+            return 70;
+        case 11338:
+            return 85;
+        case 11339:
+            return 100;
+        case 11340:
+            return 115;
+        // Mind-numbing Poison
+        case 5761:
+            return 50;
+        case 8693:
+            return 75;
+        case 11399:
+            return 100;
+        // Deadly Poison
+        case 2823:
+            return 60;
+        case 2824:
+            return 75;
+        case 11355:
+            return 90;
+        case 11356:
+            return 105;
+        case 25351:
+            return 120;
+        // Wound Poison
+        case 13219:
+            return 60;
+        case 13225:
+            return 75;
+        case 13226:
+            return 90;
+        case 13227:
+            return 105;
+        // Crippling Poison (No charges needed. Introduced in patch 1.11.)
+        // case 3408:
+        // case 11202:
+    }
+    return 0;
+}
+
 
 void Spell::EffectTriggerMissileSpell(SpellEffectIndex effect_idx)
 {
@@ -2870,6 +3025,8 @@ void Spell::EffectEnchantItemTmp(SpellEffectIndex eff_idx)
     Player* p_caster = (Player*)m_caster;
 
     uint32 enchant_id = m_spellInfo->EffectMiscValue[eff_idx];
+    uint32 charges = 0;
+
     if (!enchant_id)
     {
         sLog.outError("Spell %u Effect %u (SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY) have 0 as enchanting id", m_spellInfo->Id, eff_idx);
@@ -2890,6 +3047,29 @@ void Spell::EffectEnchantItemTmp(SpellEffectIndex eff_idx)
     // shaman family enchantments
     if (m_spellInfo->Attributes == (SPELL_ATTR_TARGET_MAINHAND_ITEM | SPELL_ATTR_NOT_SHAPESHIFT | SPELL_ATTR_DONT_AFFECT_SHEATH_STATE))
         duration = 300;                                     // 5 mins
+    // Other rogue family enchantments, always 1 hour
+    else if (m_spellInfo->SpellFamilyName == SPELLFAMILY_ROGUE)
+        duration = 1800;
+    else if (m_spellInfo->SpellVisual == 215)
+        duration = 1800;
+    // Shaman: Rockbiter Enchantments
+    else if (m_spellInfo->SpellVisual == 58)
+        duration = 300;
+    // Shaman: Flametongue Enchantments
+    else if (m_spellInfo->SpellVisual == 290)
+        duration = 300;
+    // Shaman: Frostbrand Enchantments
+    else if (m_spellInfo->SpellVisual == 291)
+        duration = 300;
+    // Sharpen Blade (Sharpening Stone) Enchantments
+    else if (m_spellInfo->SpellVisual == 3324)
+        duration = 1800;
+    // Enhance Blunt (Weightstone) Enchantments
+    else if (m_spellInfo->SpellVisual == 3325)
+        duration = 1800;
+    // Oil Enchantments
+    else if (m_spellInfo->SpellVisual == 3182)
+        duration = 1800;
     // imbue enchantments except Imbue Weapon - Beastslayer
     else if (m_spellInfo->SpellIconID == 241 && m_spellInfo->Id != 7434)
         duration = 3600;                                    // 1 hour
@@ -2899,9 +3079,13 @@ void Spell::EffectEnchantItemTmp(SpellEffectIndex eff_idx)
     // some fishing pole bonuses
     else if (m_spellInfo->HasAttribute(SPELL_ATTR_HIDDEN_CLIENTSIDE))
         duration = 600;                                     // 10 mins
-    // default case
+    // Default for Vanilla
     else
-        duration = 1800;                                    // 30 mins
+        duration = 3600;                                    // 1 hour
+
+    // Calculate the number of poison charges.
+    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_ROGUE)
+        charges = GetPoisonCharges(m_spellInfo->Id);
 
     // item can be in trade slot and have owner diff. from caster
     Player* item_owner = itemTarget->GetOwner();
@@ -2919,7 +3103,7 @@ void Spell::EffectEnchantItemTmp(SpellEffectIndex eff_idx)
     // remove old enchanting before applying new if equipped
     item_owner->ApplyEnchantment(itemTarget, TEMP_ENCHANTMENT_SLOT, false);
 
-    itemTarget->SetEnchantment(TEMP_ENCHANTMENT_SLOT, enchant_id, duration * 1000, 0);
+    itemTarget->SetEnchantment(TEMP_ENCHANTMENT_SLOT, enchant_id, duration * 1000, charges);
 
     // add new enchanting if equipped
     item_owner->ApplyEnchantment(itemTarget, TEMP_ENCHANTMENT_SLOT, true);
@@ -3839,6 +4023,32 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
             }
             break;
         }
+        case SPELLFAMILY_SHAMAN:
+        {
+            switch (m_spellInfo->Id)
+            {
+                case 20865: // Rockbiter Weapon Proc
+                case 20866:
+                case 20867:
+                case 20868:
+                case 20870:
+                case 20871:
+                {
+                    if (!unitTarget)
+                        return;
+
+                    if (!unitTarget->CanHaveThreatList())
+                        return;
+
+                    if (unitTarget->getThreatManager().getThreat(m_caster))
+                        unitTarget->getThreatManager().addThreat(m_caster, damage * m_caster->GetAttackTime(BASE_ATTACK) / 1000);
+
+                    break;
+                }
+            }
+
+            break;
+        }
     }
 
     // normal DB scripted effect
@@ -4464,7 +4674,10 @@ void Spell::EffectResurrect(SpellEffectIndex /*eff_idx*/)
 
 void Spell::EffectAddExtraAttacks(SpellEffectIndex /*eff_idx*/)
 {
-    if (!unitTarget || !unitTarget->isAlive())
+    if (!unitTarget)
+        return;
+
+    if (!unitTarget->isAlive())
         return;
 
     if (unitTarget->m_extraAttacks)
