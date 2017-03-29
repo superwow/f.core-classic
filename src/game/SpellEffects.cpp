@@ -2403,6 +2403,17 @@ void Spell::EffectSummon(SpellEffectIndex eff_idx)
         m_originalCaster->AI()->JustSummoned(spawnCreature);
     else if (m_caster->AI())
         m_caster->AI()->JustSummoned(spawnCreature);
+
+    // Eye of Kilrogg
+    if (m_spellInfo->Id == 126)
+    {
+        // Stealth for Player
+        if (m_caster->GetTypeId() == TYPEID_PLAYER)
+        {
+            spawnCreature->CastSpell(spawnCreature, 2585, TRIGGERED_OLD_TRIGGERED);
+            ((Player*)m_caster)->ModPossessPet(spawnCreature, true, AURA_REMOVE_BY_DEFAULT);
+        }
+    }
 }
 
 void Spell::EffectLearnSpell(SpellEffectIndex eff_idx)

@@ -162,6 +162,7 @@ class MANGOS_DLL_SPEC Object
         void SetObjectScale(float newScale);
 
         uint8 GetTypeId() const { return m_objectTypeId; }
+        bool IsCreature() const { return m_objectTypeId == TYPEID_UNIT; }
         bool isType(TypeMask mask) const { return !!(mask & m_objectType); }
 
         virtual void BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) const;
@@ -582,6 +583,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         virtual void SaveRespawnTime() {}
         void AddObjectToRemoveList();
+
+        virtual void DestroyForNearbyPlayers();
 
         void UpdateObjectVisibility();
         virtual void UpdateVisibilityAndView();             // update visibility for object and object for all around

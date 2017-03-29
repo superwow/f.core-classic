@@ -2479,6 +2479,22 @@ void Creature::SendAreaSpiritHealerQueryOpcode(Player* pl)
     pl->SendDirectMessage(data);
 }
 
+void Creature::DisappearAndDie()
+{
+    if (!IsInWorld())
+    {
+        sLog.outError("[CRASH][%s]DisappearAndDie: The creature is not in the world.", GetName());
+        return;
+    }
+
+    if (IsCreature() && ((Creature*)this)->IsPet())
+        ((Pet*)this)->Unsummon(PET_SAVE_AS_DELETED);
+    DestroyForNearbyPlayers();
+    if (isAlive())
+        SetDeathState(JUST_DIED);
+    RemoveCorpse();
+}
+
 void Creature::ApplyGameEventSpells(GameEventCreatureData const* eventData, bool activated)
 {
     uint32 cast_spell = activated ? eventData->spell_id_start : eventData->spell_id_end;

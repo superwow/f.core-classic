@@ -10293,3 +10293,33 @@ float Unit::GetAttackDistance(Unit const* pl) const
 
     return (RetDistance * aggroRate);
 }
+
+
+void Unit::UpdateControl()
+{
+    // Inform controller
+    if (Unit* charmer = GetCharmer())
+    {
+        if (charmer->GetTypeId() == TYPEID_PLAYER)
+        {
+            Player* charmerPlayer = (Player*)charmer;
+            if (charmerPlayer->GetCharmGuid() == GetObjectGuid())
+                charmerPlayer->SetClientControl(this, !hasUnitState(UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED));
+        }
+    }
+    // Inform myself
+    if (GetTypeId() == TYPEID_PLAYER)
+    {
+        Player* mePlayer = (Player*)this;
+
+        // Possessing someone ?
+        if (Unit* possessed = GetCharm())
+            if (possessed->GetCharmerGuid() == GetObjectGuid())
+            {
+                mePlayer->SetClientControl(possessed, !possessed->hasUnitState(UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED));
+                return;
+            }
+        mePlayer->SetClientControl(mePlayer, !hasUnitState(UNIT_STAT_CONTROLLED | UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED) && !GetCharmerGuid());
+    }
+}
+

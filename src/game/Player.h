@@ -1994,6 +1994,9 @@ class MANGOS_DLL_SPEC Player : public Unit
         // Stealth detection system
         void HandleStealthedUnitsDetection();
 
+        bool IsInVisibleList(WorldObject const* u) const;
+        bool IsInVisibleList_Unsafe(WorldObject const* u) const { return this == u || m_clientGUIDs.find(u->GetObjectGuid()) != m_clientGUIDs.end(); }
+
         Camera& GetCamera() { return m_camera; }
 
         uint8 m_forced_speed_changes[MAX_MOVE_TYPE];
@@ -2065,6 +2068,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         GridReference<Player>& GetGridRef() { return m_gridRef; }
         MapReference& GetMapRef() { return m_mapRef; }
+
+        void ModPossessPet(Pet* pet, bool apply, AuraRemoveMode m_removeMode = AURA_REMOVE_BY_DEFAULT);
 
         virtual CreatureAI* AI() override { if (m_charmInfo) return m_charmInfo->GetAI(); return nullptr; }
         virtual CombatData* GetCombatData() override { if (m_charmInfo && m_charmInfo->GetCombatData()) return m_charmInfo->GetCombatData(); return m_combatData; }

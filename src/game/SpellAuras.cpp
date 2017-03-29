@@ -1144,6 +1144,23 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             {
                 switch (GetId())
                 {
+                    // Eye of Kilrogg
+                    // Summons an Eye of Kilrogg and binds your vision to it.
+                    case 126:
+                    {
+                        if (Unit* caster = GetCaster())
+                        {
+                            if (caster->GetTypeId() == TYPEID_PLAYER)
+                            {
+                                if (Pet* guardian = caster->FindGuardianWithEntry(4277))
+                                {
+                                    ((Player*)caster)->ModPossessPet(guardian, false, AURA_REMOVE_BY_DEFAULT);
+                                    guardian->DisappearAndDie();
+                                }
+                            }
+                        }
+                        return;
+                    }
                     case 7057:                              // Haunting Spirits
                         // expected to tick with 30 sec period (tick part see in Aura::PeriodicTick)
                         m_isPeriodic = true;
@@ -2072,6 +2089,59 @@ void Aura::HandleModPossessPet(bool apply, bool Real)
     }
     else
         caster->ResetControlState();
+}
+
+void Player::ModPossessPet(Pet* pet, bool apply, AuraRemoveMode m_removeMode)
+{
+    Player* p_caster = this;
+    Camera& camera = p_caster->GetCamera();
+
+    if (apply)
+    {
+        pet->addUnitState(UNIT_STAT_CONTROLLED);
+
+        // target should became visible at SetView call(if not visible before):
+        // otherwise client\p_caster will ignore packets from the target(SetClientControl for example)
+        camera.SetView(pet);
+
+        p_caster->SetCharm(pet);
+        p_caster->SetMover(pet);
+
+        pet->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+        pet->SetCharmerGuid(p_caster->GetObjectGuid());
+
+        pet->StopMoving();
+        pet->GetMotionMaster()->Clear(false);
+        pet->GetMotionMaster()->MoveIdle();
+        pet->UpdateControl();
+    }
+    else
+    {
+        p_caster->SetCharm(nullptr);
+        p_caster->SetMover(nullptr);
+
+        // there is a possibility that target became invisible for client\p_caster at ResetView call:
+        // it must be called after movement control unapplying, not before! the reason is same as at aura applying
+        camera.ResetView();
+        pet->UpdateControl();
+        pet->SetCharmerGuid(ObjectGuid());
+
+        // On delete only do caster related effects.
+        if (m_removeMode == AURA_REMOVE_BY_DELETE)
+            return;
+
+        pet->clearUnitState(UNIT_STAT_CONTROLLED);
+
+        pet->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+
+        //pet->AttackStop();
+
+        // out of range pet dismissed
+        if (!pet->IsWithinDistInMap(p_caster, 100.0f))
+            p_caster->RemovePet(PET_SAVE_REAGENTS);
+        else if (!pet->isInCombat())
+            pet->GetMotionMaster()->MoveFollow(p_caster, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+    }
 }
 
 void Aura::HandleModCharm(bool apply, bool Real)
