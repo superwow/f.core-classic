@@ -864,6 +864,31 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
+                // Refocus: "Instantly clears the cooldowns of Aimed Shot, Multishot, Volley, and Arcane Shot."
+                // Used by Renataki's Charm of Beasts (19953) reward from Edge of Madness in Zul'Gurub.
+                case 24531: 
+                {
+                    if (!m_caster->GetTypeId() == TYPEID_PLAYER)
+                        return;
+                    const SpellCooldowns& cm = ((Player*)m_caster)->GetSpellCooldownMap();
+                    for (SpellCooldowns::const_iterator itr = cm.begin(); itr != cm.end();)
+                    {
+                        SpellEntry const *spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(itr->first);
+                        // Hunter: Arcane Shot, Multi Shot, Volley, Aimed Shot
+                        if (spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER &&
+                            spellInfo->Id != m_spellInfo->Id &&
+                            ((spellInfo->SpellFamilyFlags & uint64(0x0000000000000800))  ||
+                             (spellInfo->SpellFamilyFlags & uint64(0x0000000000001000))  ||
+                             (spellInfo->SpellFamilyFlags & uint64(0x0000000000002000))  ||
+                             (spellInfo->SpellFamilyFlags & uint64(0x0000000000020000))))
+                        {
+                            ((Player*)m_caster)->RemoveSpellCooldown((itr++)->first, true);
+                        }
+                        else
+                            ++itr;
+                    }
+                    return;
+                }
                 case 24781:                                 // Dream Fog
                 {
                     // TODO Note: Should actually not only AttackStart, but fixate on the target
