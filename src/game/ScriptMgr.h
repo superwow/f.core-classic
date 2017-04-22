@@ -65,8 +65,8 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_REMOVE_AURA              = 14,           // resSource = Unit, datalong = spell_id
     SCRIPT_COMMAND_CAST_SPELL               = 15,           // resSource = Unit, cast spell at resTarget = Unit
                                                             // datalong=spellid
+                                                            // datalong2=castFlags, enum TriggeredCastFlags
                                                             // dataint1-4 optional for random selected spell
-                                                            // data_flags &  SCRIPT_FLAG_COMMAND_ADDITIONAL = cast triggered
     SCRIPT_COMMAND_PLAY_SOUND               = 16,           // resSource = WorldObject, target=any/player, datalong (sound_id), datalong2 (bitmask: 0/1=target-player, 0/2=with distance dependent, 0/4=map wide, 0/8=zone wide; so 1|2 = 3 is target with distance dependent)
     SCRIPT_COMMAND_CREATE_ITEM              = 17,           // source or target must be player, datalong = item entry, datalong2 = amount
     SCRIPT_COMMAND_DESPAWN_SELF             = 18,           // resSource = Creature, datalong = despawn delay
@@ -155,7 +155,11 @@ struct ScriptInfo
 
     union
     {
-        // datalong unused                                  // SCRIPT_COMMAND_TALK (0)
+        struct                                              // SCRIPT_COMMAND_TALK (0)
+        {
+            uint32 stringTemplateId;                        // datalong
+            uint32 empty1;                                  // datalong2
+        } talk;
 
         struct                                              // SCRIPT_COMMAND_EMOTE (1)
         {
@@ -215,6 +219,7 @@ struct ScriptInfo
         {
             uint32 creatureEntry;                           // datalong
             uint32 despawnDelay;                            // datalong2
+            uint32 pathId;                                  // datalong3
         } summonCreature;
 
         // datalong unused                                  // SCRIPT_COMMAND_OPEN_DOOR (11)
@@ -240,7 +245,7 @@ struct ScriptInfo
         struct                                              // SCRIPT_COMMAND_CAST_SPELL (15)
         {
             uint32 spellId;                                 // datalong
-            uint32 empty;                                   // datalong2
+            uint32 castFlags;                               // datalong2
         } castSpell;
 
         struct                                              // SCRIPT_COMMAND_PLAY_SOUND (16)
@@ -270,7 +275,7 @@ struct ScriptInfo
         struct                                              // SCRIPT_COMMAND_MOVEMENT (20)
         {
             uint32 movementType;                            // datalong
-            uint32 wanderDistance;                          // datalong2
+            uint32 wanderORpathId;                          // datalong2
         } movement;
 
         struct                                              // SCRIPT_COMMAND_SET_ACTIVEOBJECT (21)
@@ -397,7 +402,7 @@ struct ScriptInfo
 
         struct
         {
-            uint32 data[2];
+            uint32 data[3];
         } raw;
     };
 
@@ -499,13 +504,13 @@ class ScriptAction
         ScriptInfo const* m_script;                         // pointer to static script data
 
         // Helper functions
-        bool GetScriptCommandObject(const ObjectGuid guid, bool includeItem, Object*& resultObject);
-        bool GetScriptProcessTargets(WorldObject* pOrigSource, WorldObject* pOrigTarget, WorldObject*& pFinalSource, WorldObject*& pFinalTarget);
-        bool LogIfNotCreature(WorldObject* pWorldObject);
-        bool LogIfNotUnit(WorldObject* pWorldObject);
-        bool LogIfNotGameObject(WorldObject* pWorldObject);
-        bool LogIfNotPlayer(WorldObject* pWorldObject);
-        Player* GetPlayerTargetOrSourceAndLog(WorldObject* pSource, WorldObject* pTarget);
+        bool GetScriptCommandObject(const ObjectGuid guid, bool includeItem, Object*& resultObject) const;
+        bool GetScriptProcessTargets(WorldObject* pOrigSource, WorldObject* pOrigTarget, WorldObject*& pFinalSource, WorldObject*& pFinalTarget) const;
+        bool LogIfNotCreature(WorldObject* pWorldObject) const;
+        bool LogIfNotUnit(WorldObject* pWorldObject) const;
+        bool LogIfNotGameObject(WorldObject* pWorldObject) const;
+        bool LogIfNotPlayer(WorldObject* pWorldObject) const;
+        Player* GetPlayerTargetOrSourceAndLog(WorldObject* pSource, WorldObject* pTarget) const;
 };
 
 typedef std::multimap < uint32 /*delay*/, ScriptInfo > ScriptMap;
@@ -527,14 +532,13 @@ enum ScriptLoadResult
     SCRIPT_LOAD_OK,
     SCRIPT_LOAD_ERR_NOT_FOUND,
     SCRIPT_LOAD_ERR_WRONG_API,
-    SCRIPT_LOAD_ERR_OUTDATED,
 };
 
 class ScriptMgr
 {
     public:
         ScriptMgr();
-        ~ScriptMgr();
+        ~ScriptMgr() {};
 
         void LoadGameObjectScripts();
         void LoadGameObjectTemplateScripts();
@@ -547,6 +551,7 @@ class ScriptMgr
         void LoadCreatureMovementScripts();
 
         void LoadDbScriptStrings();
+        void LoadDbScriptStringTemplates(std::set<int32>& ids);
 
         void LoadScriptNames();
         void LoadAreaTriggerScripts();
@@ -558,6 +563,9 @@ class ScriptMgr
         const char* GetScriptName(uint32 id) const { return id < m_scriptNames.size() ? m_scriptNames[id].c_str() : ""; }
         uint32 GetScriptId(const char* name) const;
         uint32 GetScriptIdsCount() const { return m_scriptNames.size(); }
+
+        bool CheckScriptStringTemplateId(uint32 id) const { return m_stringTemplates.find(id) != m_stringTemplates.end(); }
+        void GetScriptStringTemplate(uint32 id, std::vector<int32>& stringTemplate) { stringTemplate = m_stringTemplates[id]; }
 
         ScriptLoadResult LoadScriptLibrary(const char* libName);
         void UnloadScriptLibrary();
@@ -581,8 +589,8 @@ class ScriptMgr
         bool OnQuestAccept(Player* pPlayer, Item* pItem, Quest const* pQuest);
         bool OnQuestRewarded(Player* pPlayer, Creature* pCreature, Quest const* pQuest);
         bool OnQuestRewarded(Player* pPlayer, GameObject* pGameObject, Quest const* pQuest);
-        uint32 GetDialogStatus(Player* pPlayer, Creature* pCreature);
-        uint32 GetDialogStatus(Player* pPlayer, GameObject* pGameObject);
+        uint32 GetDialogStatus(const Player* pPlayer, const Creature* pCreature) const;
+        uint32 GetDialogStatus(const Player* pPlayer, const GameObject* pGameObject) const;
         bool OnGameObjectUse(Player* pPlayer, GameObject* pGameObject);
         bool OnItemUse(Player* pPlayer, Item* pItem, SpellCastTargets const& targets);
         bool OnAreaTrigger(Player* pPlayer, AreaTriggerEntry const* atEntry);
@@ -607,10 +615,12 @@ class ScriptMgr
         typedef std::vector<std::string> ScriptNameMap;
         typedef std::unordered_map<uint32, uint32> AreaTriggerScriptMap;
         typedef std::unordered_map<uint32, uint32> EventIdScriptMap;
+        typedef std::unordered_map<uint32, std::vector<int32>> ScriptStringTemplateMap;
 
         AreaTriggerScriptMap    m_AreaTriggerScripts;
         EventIdScriptMap        m_EventIdScripts;
 
+        ScriptStringTemplateMap m_stringTemplates;
         ScriptNameMap           m_scriptNames;
         MANGOS_LIBRARY_HANDLE   m_hScriptLib;
 
@@ -634,8 +644,8 @@ class ScriptMgr
         bool (MANGOS_IMPORT* m_pOnItemQuestAccept)(Player*, Item*, Quest const*);
         bool (MANGOS_IMPORT* m_pOnQuestRewarded)(Player*, Creature*, Quest const*);
         bool (MANGOS_IMPORT* m_pOnGOQuestRewarded)(Player*, GameObject*, Quest const*);
-        uint32(MANGOS_IMPORT* m_pGetNPCDialogStatus)(Player*, Creature*);
-        uint32(MANGOS_IMPORT* m_pGetGODialogStatus)(Player*, GameObject*);
+        uint32(MANGOS_IMPORT* m_pGetNPCDialogStatus)(const Player*, const Creature*);
+        uint32(MANGOS_IMPORT* m_pGetGODialogStatus)(const Player*, const GameObject*);
         bool (MANGOS_IMPORT* m_pOnGOUse)(Player*, GameObject*);
         bool (MANGOS_IMPORT* m_pOnItemUse)(Player*, Item*, SpellCastTargets const&);
         bool (MANGOS_IMPORT* m_pOnAreaTrigger)(Player*, AreaTriggerEntry const*);
@@ -658,6 +668,6 @@ MANGOS_DLL_SPEC uint32 GetScriptId(const char* name);
 MANGOS_DLL_SPEC char const* GetScriptName(uint32 id);
 MANGOS_DLL_SPEC uint32 GetScriptIdsCount();
 MANGOS_DLL_SPEC void SetExternalWaypointTable(char const* tableName);
-MANGOS_DLL_SPEC bool AddWaypointFromExternal(uint32 entry, int32 pathId, uint32 pointId, float x, float y, float z, float o, uint32 waittime);
+MANGOS_DLL_SPEC bool AddWaypointFromExternal(uint32 entry, uint32 pathId, uint32 pointId, float x, float y, float z, float o, uint32 waittime);
 
 #endif

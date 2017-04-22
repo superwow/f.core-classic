@@ -28,9 +28,9 @@ enum
 {
     SAY_GREET                   = -1533009,
     SAY_AGGRO_1                 = -1533010,
-    SAY_AGGRO_2                 = -1533011,
-    SAY_AGGRO_3                 = -1533012,
-    SAY_AGGRO_4                 = -1533013,
+    SAY_ENRAGE_1                = -1533011,
+    SAY_ENRAGE_2                = -1533012,
+    SAY_ENRAGE_3                = -1533013,
     SAY_SLAY_1                  = -1533014,
     SAY_SLAY_2                  = -1533015,
     SAY_DEATH                   = -1533016,
@@ -39,7 +39,7 @@ enum
 
     // SOUND_RANDOM_AGGRO       = 8955,                     // soundId containing the 4 aggro sounds, we not using this
 
-    SPELL_POSIONBOLT_VOLLEY     = 28796,
+    SPELL_POISONBOLT_VOLLEY     = 28796,
     SPELL_ENRAGE                = 28798,
     SPELL_RAIN_OF_FIRE          = 28794,
     SPELL_WIDOWS_EMBRACE        = 28732,
@@ -70,13 +70,8 @@ struct boss_faerlinaAI : public ScriptedAI
 
     void Aggro(Unit* /*pWho*/) override
     {
-        switch (urand(0, 3))
-        {
-            case 0: DoScriptText(SAY_AGGRO_1, m_creature); break;
-            case 1: DoScriptText(SAY_AGGRO_2, m_creature); break;
-            case 2: DoScriptText(SAY_AGGRO_3, m_creature); break;
-            case 3: DoScriptText(SAY_AGGRO_4, m_creature); break;
-        }
+
+        DoScriptText(SAY_AGGRO_1, m_creature);
 
         if (m_pInstance)
             m_pInstance->SetData(TYPE_FAERLINA, IN_PROGRESS);
@@ -145,7 +140,7 @@ struct boss_faerlinaAI : public ScriptedAI
         // Poison Bolt Volley
         if (m_uiPoisonBoltVolleyTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_POSIONBOLT_VOLLEY) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_POISONBOLT_VOLLEY) == CAST_OK)
                 m_uiPoisonBoltVolleyTimer = 11000;
         }
         else
@@ -168,7 +163,12 @@ struct boss_faerlinaAI : public ScriptedAI
         {
             if (DoCastSpellIfCan(m_creature, SPELL_ENRAGE) == CAST_OK)
             {
-                DoScriptText(EMOTE_BOSS_GENERIC_FRENZY, m_creature);
+                switch (urand(0,2))
+                {
+                    case 0: DoScriptText(SAY_ENRAGE_1, m_creature); break;
+                    case 1: DoScriptText(SAY_ENRAGE_2, m_creature); break;
+                    case 2: DoScriptText(SAY_ENRAGE_3, m_creature); break;
+                }
                 m_uiEnrageTimer = 60000;
             }
         }

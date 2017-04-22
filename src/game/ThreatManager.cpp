@@ -19,7 +19,7 @@
 #include "ThreatManager.h"
 #include "Unit.h"
 #include "Creature.h"
-#include "CreatureAI.h"
+#include "AI/CreatureAI.h"
 #include "Map.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
@@ -101,6 +101,9 @@ void HostileReference::fireStatusChanged(ThreatRefStatusChangeEvent& pThreatRefS
 
 void HostileReference::addThreat(float pMod)
 {
+    if (pMod + iThreat < 0)
+        pMod = -iThreat;
+
     iThreat += pMod;
     // the threat is changed. Source and target unit have to be availabe
     // if the link was cut before relink it again
@@ -198,9 +201,9 @@ void HostileReference::removeReference()
 
 //============================================================
 
-Unit* HostileReference::getSourceUnit()
+Unit* HostileReference::getSourceUnit() const
 {
-    return (getSource()->getOwner());
+    return getSource()->getOwner();
 }
 
 //============================================================
@@ -306,7 +309,7 @@ HostileReference* ThreatContainer::selectNextVictim(Creature* pAttacker, Hostile
         // some units are prefered in comparison to others
         // if (checkThreatArea) consider IsOutOfThreatArea - expected to be only set for pCurrentVictim
         //     This prevents dropping valid targets due to 1.1 or 1.3 threat rule vs invalid current target
-        if (!onlySecondChoiceTargetsFound && pAttacker->IsSecondChoiceTarget(pTarget, pCurrentRef == pCurrentVictim))
+        if (!onlySecondChoiceTargetsFound && pAttacker->IsSecondChoiceTarget(pTarget, false, pCurrentRef == pCurrentVictim))
         {
             if (iter != lastRef)
                 ++iter;
@@ -342,7 +345,7 @@ HostileReference* ThreatContainer::selectNextVictim(Creature* pAttacker, Hostile
                 {
                     Unit* pCurrentTarget = pCurrentVictim->getTarget();
                     MANGOS_ASSERT(pCurrentTarget);
-                    if (pAttacker->IsSecondChoiceTarget(pCurrentTarget, true))
+                    if (pAttacker->IsSecondChoiceTarget(pCurrentTarget, false, true))
                     {
                         // CurrentVictim is invalid, so return CurrentRef
                         found = true;
@@ -466,12 +469,16 @@ Unit* ThreatManager::getHostileTarget()
 
 float ThreatManager::getThreat(Unit* pVictim, bool pAlsoSearchOfflineList)
 {
+    if (!pVictim)
+        return 0.0f;
+
     float threat = 0.0f;
-    HostileReference* ref = iThreatContainer.getReferenceByTarget(pVictim);
-    if (!ref && pAlsoSearchOfflineList)
-        ref = iThreatOfflineContainer.getReferenceByTarget(pVictim);
-    if (ref)
+
+    if (HostileReference* ref = iThreatContainer.getReferenceByTarget(pVictim))
         threat = ref->getThreat();
+    else if (pAlsoSearchOfflineList)
+        threat = iThreatOfflineContainer.getReferenceByTarget(pVictim)->getThreat();
+
     return threat;
 }
 

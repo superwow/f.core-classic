@@ -69,7 +69,7 @@ class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
         typedef std::vector<MovementGenerator*> ExpireList;
 
     public:
-        explicit MotionMaster(Unit* unit) : m_owner(unit), m_expList(nullptr), m_cleanFlag(MMCF_NONE) {}
+        explicit MotionMaster(Unit* unit) : m_owner(unit), m_expList(nullptr), m_cleanFlag(MMCF_NONE), m_defaultPathId(0) {}
         ~MotionMaster();
 
         void Initialize();
@@ -103,13 +103,13 @@ class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
         void MoveRandomAroundPoint(float x, float y, float z, float radius, float verticalZ = 0.0f);
         void MoveTargetedHome();
         void MoveFollow(Unit* target, float dist, float angle);
-        void MoveChase(Unit* target, float dist = 0.0f, float angle = 0.0f);
+        void MoveChase(Unit* target, float dist = 0.0f, float angle = 0.0f, bool moveFurther = true);
         void MoveConfused();
         void MoveFleeing(Unit* enemy, uint32 timeLimit = 0);
         void MovePoint(uint32 id, float x, float y, float z, bool generatePath = true);
         void MoveSeekAssistance(float x, float y, float z);
         void MoveSeekAssistanceDistract(uint32 timer);
-        void MoveWaypoint(int32 id = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0);
+        void MoveWaypoint(uint32 pathId = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0);
         void MoveTaxiFlight(uint32 path, uint32 pathnode);
         void MoveDistract(uint32 timeLimit);
         void MoveFall();
@@ -122,7 +122,9 @@ class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
 
         uint32 getLastReachedWaypoint() const;
         void GetWaypointPathInformation(std::ostringstream& oss) const;
-        bool GetDestination(float& x, float& y, float& z);
+        bool GetDestination(float& x, float& y, float& z) const;
+
+        void SetPathId(uint32 pathId) { m_defaultPathId = pathId; }
 
     private:
         void Mutate(MovementGenerator* m);                  // use Move* functions instead
@@ -136,5 +138,7 @@ class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
         Unit*       m_owner;
         ExpireList* m_expList;
         uint8       m_cleanFlag;
+
+        uint32      m_defaultPathId;
 };
 #endif
