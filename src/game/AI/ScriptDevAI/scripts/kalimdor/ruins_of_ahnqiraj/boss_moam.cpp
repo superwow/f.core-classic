@@ -30,43 +30,50 @@ enum
     EMOTE_ENERGIZING         = -1509028,
 
     SPELL_TRAMPLE            = 15550,
-    SPELL_DRAIN_MANA         = 25671,
     SPELL_ARCANE_ERUPTION    = 25672,
-    SPELL_SUMMON_MANAFIEND_1 = 25681,
-    SPELL_SUMMON_MANAFIEND_2 = 25682,
-    SPELL_SUMMON_MANAFIEND_3 = 25683,
+    SPELL_DRAIN_MANA         = 25676,
+    SPELL_SUMMON_MANAFIENDS  = 25684,
     SPELL_ENERGIZE           = 25685,
-
-    PHASE_ATTACKING          = 0,
-    PHASE_ENERGIZING         = 1
 };
 
 struct boss_moamAI : public ScriptedAI
 {
     boss_moamAI(Creature* pCreature) : ScriptedAI(pCreature) {Reset();}
 
-    uint8 m_uiPhase;
-
     uint32 m_uiTrampleTimer;
     uint32 m_uiManaDrainTimer;
-    uint32 m_uiCheckoutManaTimer;
-    uint32 m_uiSummonManaFiendsTimer;
+    uint32 m_uiEnergizeTimer;
+    uint32 m_uiAddCount;
 
     void Reset() override
     {
-        m_uiTrampleTimer            = 9000;
-        m_uiManaDrainTimer          = 3000;
-        m_uiSummonManaFiendsTimer   = 90000;
-        m_uiCheckoutManaTimer       = 1500;
-        m_uiPhase                   = PHASE_ATTACKING;
+        m_uiTrampleTimer = urand(10 * IN_MILLISECONDS, 15 * IN_MILLISECONDS);
+        m_uiManaDrainTimer = 6 * IN_MILLISECONDS;
+        m_uiEnergizeTimer = 1.5 * MINUTE * IN_MILLISECONDS;
+        m_uiAddCount = 0;
         m_creature->SetPower(POWER_MANA, 0);
-        m_creature->SetMaxPower(POWER_MANA, 0);
     }
 
     void Aggro(Unit* /*pWho*/) override
     {
         DoScriptText(EMOTE_AGGRO, m_creature);
-        m_creature->SetMaxPower(POWER_MANA, m_creature->GetCreatureInfo()->MaxLevelMana);
+    }
+
+    void JustSummoned(Creature* /*pSummoned*/) override
+    {
+        m_uiAddCount++;
+    }
+
+    void SummonedCreatureJustDied(Creature* /*pSummmoned*/) override
+    {
+        m_uiAddCount--;
+
+        if (m_uiAddCount == 0)
+        {
+            m_creature->RemoveAurasDueToSpell(SPELL_ENERGIZE);
+
+            m_uiEnergizeTimer = 1.5 * MINUTE * IN_MILLISECONDS;
+        }
     }
 
     void UpdateAI(const uint32 uiDiff) override
@@ -74,71 +81,50 @@ struct boss_moamAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
             return;
 
-        switch (m_uiPhase)
+        // Trample
+        if (m_uiTrampleTimer < uiDiff)
         {
-            case PHASE_ATTACKING:
-                if (m_uiCheckoutManaTimer <= uiDiff)
-                {
-                    m_uiCheckoutManaTimer = 1500;
-                    if (m_creature->GetPower(POWER_MANA) * 100 / m_creature->GetMaxPower(POWER_MANA) > 75.0f)
-                    {
-                        DoCastSpellIfCan(m_creature, SPELL_ENERGIZE);
-                        DoScriptText(EMOTE_ENERGIZING, m_creature);
-                        m_uiPhase = PHASE_ENERGIZING;
-                        return;
-                    }
-                }
-                else
-                    m_uiCheckoutManaTimer -= uiDiff;
-
-                if (m_uiSummonManaFiendsTimer <= uiDiff)
-                {
-                    DoCastSpellIfCan(m_creature->getVictim(), SPELL_SUMMON_MANAFIEND_1, CAST_TRIGGERED);
-                    DoCastSpellIfCan(m_creature->getVictim(), SPELL_SUMMON_MANAFIEND_2, CAST_TRIGGERED);
-                    DoCastSpellIfCan(m_creature->getVictim(), SPELL_SUMMON_MANAFIEND_3, CAST_TRIGGERED);
-                    m_uiSummonManaFiendsTimer = 90000;
-                }
-                else
-                    m_uiSummonManaFiendsTimer -= uiDiff;
-
-                if (m_uiManaDrainTimer <= uiDiff)
-                {
-                    if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, SPELL_DRAIN_MANA, SELECT_FLAG_POWER_MANA))
-                    {
-                        if (DoCastSpellIfCan(pTarget, SPELL_DRAIN_MANA) == CAST_OK)
-                            m_uiManaDrainTimer = urand(2000, 6000);
-                    }
-                }
-                else
-                    m_uiManaDrainTimer -= uiDiff;
-
-                if (m_uiTrampleTimer <= uiDiff)
-                {
-                    DoCastSpellIfCan(m_creature->getVictim(), SPELL_TRAMPLE);
-                    m_uiTrampleTimer = 15000;
-                }
-                else
-                    m_uiTrampleTimer -= uiDiff;
-
-                DoMeleeAttackIfReady();
-                break;
-            case PHASE_ENERGIZING:
-                if (m_uiCheckoutManaTimer <= uiDiff)
-                {
-                    m_uiCheckoutManaTimer = 1500;
-                    if (m_creature->GetPower(POWER_MANA) == m_creature->GetMaxPower(POWER_MANA))
-                    {
-                        m_creature->RemoveAurasDueToSpell(SPELL_ENERGIZE);
-                        DoCastSpellIfCan(m_creature, SPELL_ARCANE_ERUPTION);
-                        DoScriptText(EMOTE_MANA_FULL, m_creature);
-                        m_uiPhase = PHASE_ATTACKING;
-                        return;
-                    }
-                }
-                else
-                    m_uiCheckoutManaTimer -= uiDiff;
-                break;
+            if (DoCastSpellIfCan(m_creature, SPELL_TRAMPLE) == CAST_OK)
+                m_uiTrampleTimer = urand(10 * IN_MILLISECONDS, 15 * IN_MILLISECONDS);
         }
+        else
+            m_uiTrampleTimer -= uiDiff;
+
+        // Mana Drain
+        if (m_uiManaDrainTimer < uiDiff)
+        {
+            if (DoCastSpellIfCan(m_creature, SPELL_DRAIN_MANA) == CAST_OK)
+                m_uiManaDrainTimer = 6 * IN_MILLISECONDS;
+        }
+        else
+            m_uiManaDrainTimer -= uiDiff;
+
+        // Energize
+        if (m_uiEnergizeTimer < uiDiff)
+        {
+            if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_MANAFIENDS) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature, SPELL_ENERGIZE) == CAST_OK)
+                {
+                    DoScriptText(EMOTE_ENERGIZING, m_creature);
+                    m_uiEnergizeTimer = 0;
+                }
+        }
+        else
+            m_uiEnergizeTimer -= uiDiff;
+
+        // Arcane Eruption
+        if (m_creature->GetPowerPercent() == 100.0f)
+        {
+            m_creature->RemoveAurasDueToSpell(SPELL_ENERGIZE);
+
+            if (DoCastSpellIfCan(m_creature, SPELL_ARCANE_ERUPTION) == CAST_OK)
+            {
+                DoScriptText(EMOTE_MANA_FULL, m_creature);
+                m_uiEnergizeTimer = 1.5 * MINUTE * IN_MILLISECONDS;
+            }
+        }
+
+        DoMeleeAttackIfReady();
     }
 };
 

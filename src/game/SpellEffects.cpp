@@ -3607,6 +3607,32 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->CastSpell(unitTarget, roll_chance_i(50) ? 24714 : 24715, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
+                case 25671:                                 // Drain Mana
+                {
+                    if (!unitTarget)
+                        return;
+
+                    unitTarget->CastSpell(m_caster, 26639, TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
+                case 25676:                                 // Drain Mana
+                {
+                    if (!unitTarget || !unitTarget->isAlive() || unitTarget->GetPowerType() != POWER_MANA)
+                        return;
+
+                    m_caster->CastSpell(unitTarget, 25671, TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
+                case 25684:                                 // Summon Mana Fiends
+                {
+                    m_caster->CastSpell(m_caster, 25681, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(m_caster, 25682, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(m_caster, 25683, TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
                 case 26004:                                 // Mistletoe
                 {
                     if (!unitTarget)
