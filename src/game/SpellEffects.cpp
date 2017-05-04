@@ -855,6 +855,15 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
+                case 23777:                                 // Zero Mana / Full Health DND
+                {
+                    m_caster->SetHealthPercent(100.0f);
+
+                    if (m_caster->GetPowerType() == POWER_MANA)
+                        m_caster->SetPowerPercent(POWER_MANA, 0.0f);
+
+                    return;
+                }
                 case 24781:                                 // Dream Fog
                 {
                     // TODO Note: Should actually not only AttackStart, but fixate on the target
@@ -3608,6 +3617,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     return;
                 }
                 case 25671:                                 // Drain Mana
+                case 25755:                                 // Drain Mana
                 {
                     if (!unitTarget)
                         return;
@@ -3617,11 +3627,24 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     return;
                 }
                 case 25676:                                 // Drain Mana
+                case 26559:                                 // Drain Mana
                 {
+                    // To-Do: Research and limit the use of Mana Drain on x targets. (e.g. 25676 drains a maximum of 6 targets)
                     if (!unitTarget || !unitTarget->isAlive() || unitTarget->GetPowerType() != POWER_MANA)
                         return;
 
                     m_caster->CastSpell(unitTarget, 25671, TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
+                case 25754:                                 // Drain Mana
+                case 26457:                                 // Drain Mana
+                {
+                    // To-Do: Research and limit the use of Mana Drain on x targets.
+                    if (!unitTarget || !unitTarget->isAlive() || unitTarget->GetPowerType() != POWER_MANA)
+                        return;
+
+                    m_caster->CastSpell(unitTarget, 25755, TRIGGERED_OLD_TRIGGERED);
 
                     return;
                 }

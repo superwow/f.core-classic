@@ -8219,6 +8219,12 @@ void Unit::SetMaxPower(Powers power, uint32 val)
         SetPower(power, val);
 }
 
+void Unit::SetPowerPercent(Powers power, float percent)
+{
+    uint32 newPower = GetMaxPower(power) * percent / 100.0f;
+    SetPower(power, newPower);
+}
+
 void Unit::ApplyPowerMod(Powers power, uint32 val, bool apply)
 {
     ApplyModUInt32Value(UNIT_FIELD_POWER1 + power, val, apply);
