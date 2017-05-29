@@ -41,6 +41,7 @@
 #include "Server/DBCStructure.h"
 #include "WorldPacket.h"
 #include "Timer.h"
+#include "Map.h"
 
 #include <list>
 
@@ -498,7 +499,7 @@ enum UnitFlags
     UNIT_FLAG_PVP                   = 0x00001000,
     UNIT_FLAG_SILENCED              = 0x00002000,           // silenced, 2.1.1
     UNIT_FLAG_UNK_14                = 0x00004000,           // 2.0.8
-    UNIT_FLAG_UNK_15                = 0x00008000,           // related to jerky movement in water?
+    UNIT_FLAG_USE_SWIM_ANIMATION    = 0x00008000,           // related to jerky movement in water?
     UNIT_FLAG_UNK_16                = 0x00010000,           // removes attackable icon
     UNIT_FLAG_PACIFIED              = 0x00020000,
     UNIT_FLAG_DISABLE_ROTATE        = 0x00040000,
@@ -1410,6 +1411,7 @@ class Unit : public WorldObject
         bool IsSitState() const;
         bool IsStandState() const;
         void SetStandState(uint8 state);
+        bool IsNonDungeonCritter() const { return GetCreatureType() == CREATURE_TYPE_CRITTER && !GetMap()->IsDungeon(); }
 
         bool IsMounted() const { return !!GetMountID(); }
         uint32 GetMountID() const { return GetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID); }
@@ -2107,6 +2109,8 @@ class Unit : public WorldObject
         void AddPetAura(PetAura const* petSpell);
         void RemovePetAura(PetAura const* petSpell);
 
+        void UpdateControl();
+
         // Movement info
         MovementInfo m_movementInfo;
         Movement::MoveSpline* movespline;
@@ -2148,6 +2152,8 @@ class Unit : public WorldObject
         void _UpdateSpells(uint32 time);
         void _UpdateAutoRepeatSpell();
         bool m_AutoRepeatFirstCast;
+        bool m_AutoRepeatInterruptCastDelayed;
+        bool m_AutoRepeatInterruptCastInstantly;
 
         uint32 m_attackTimer[MAX_ATTACK];
 

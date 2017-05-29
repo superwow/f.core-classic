@@ -871,8 +871,16 @@ uint32 Player::EnvironmentalDamage(EnvironmentalDamageType type, uint32 damage)
     uint32 absorb = 0;
     uint32 resist = 0;
     if (type == DAMAGE_LAVA)
+    {
+        if (IsImmuneToDamage(SPELL_SCHOOL_MASK_FIRE))
+            return 0;
+
         CalculateDamageAbsorbAndResist(this, SPELL_SCHOOL_MASK_FIRE, DIRECT_DAMAGE, damage, &absorb, &resist);
+    }
     else if (type == DAMAGE_SLIME)
+        if (IsImmuneToDamage(SPELL_SCHOOL_MASK_NATURE))
+            return 0;
+
         CalculateDamageAbsorbAndResist(this, SPELL_SCHOOL_MASK_NATURE, DIRECT_DAMAGE, damage, &absorb, &resist);
 
     damage -= absorb + resist;
@@ -2307,7 +2315,7 @@ void Player::GiveLevel(uint32 level)
     // send levelup info to client
     WorldPacket data(SMSG_LEVELUP_INFO, (4 + 4 + MAX_POWERS * 4 + MAX_STATS * 4));
     data << uint32(level);
-    data << uint32(int32(classInfo.basehealth) - int32(GetCreateHealth()));
+    data << uint32((int32(classInfo.basehealth) - int32(GetCreateHealth())) + ((int32(info.stats[STAT_STAMINA]) - GetCreateStat(STAT_STAMINA)) * 10));
     // for(int i = 0; i < MAX_POWERS; ++i)                  // Powers loop (0-6)
     data << uint32(int32(classInfo.basemana)   - int32(GetCreateMana()));
     data << uint32(0);

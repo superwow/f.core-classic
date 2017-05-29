@@ -39,6 +39,13 @@ bool WorldSession::processChatmessageFurtherAfterSecurityChecks(std::string& msg
 {
     if (lang != LANG_ADDON)
     {
+        // Clients cannot send >255 characters, so if limit is broken, this may be a cheat/hack. Reject such messages.
+        if (msg.size() > 255)
+        {
+            sLog.outError("Player %s (GUID: %u) attempted to send chat message with more than 255 characters.", GetPlayer()->GetName(), GetPlayer()->GetGUIDLow());
+            return false;
+        }
+
         // strip invisible characters for non-addon messages
         if (sWorld.getConfig(CONFIG_BOOL_CHAT_FAKE_MESSAGE_PREVENTING))
             stripLineInvisibleChars(msg);

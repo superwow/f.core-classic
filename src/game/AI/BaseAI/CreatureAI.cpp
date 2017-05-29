@@ -189,8 +189,23 @@ void CreatureAI::SetCombatMovement(bool enable, bool stopOrStartMovement /*=fals
 void CreatureAI::HandleMovementOnAttackStart(Unit* victim) const
 {
     MotionMaster* creatureMotion = m_unit->GetMotionMaster();
+
     if (m_isCombatMovement)
-        creatureMotion->MoveChase(victim, m_attackDistance, m_attackAngle);
+    {
+        // Rabbits, deer, etc. should attempt to flee from danger.
+        if (m_creature->IsNonDungeonCritter())
+        {
+            m_creature->StopMoving();
+            creatureMotion->MoveFleeing(victim, 20);
+            m_creature->DeleteThreatList();
+            m_creature->CombatStop(true);
+        }
+        else
+        {
+            creatureMotion->MoveChase(victim, m_attackDistance, m_attackAngle);
+        }
+    }
+
     // TODO - adapt this to only stop OOC-MMGens when MotionMaster rewrite is finished
     else if (creatureMotion->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE || creatureMotion->GetCurrentMovementGeneratorType() == RANDOM_MOTION_TYPE)
     {
