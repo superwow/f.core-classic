@@ -254,7 +254,7 @@ static AuraType const frozenAuraTypes[] = { SPELL_AURA_MOD_ROOT, SPELL_AURA_MOD_
 Aura::Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem) :
     m_spellmod(nullptr), m_periodicTimer(0), m_periodicTick(0), m_removeMode(AURA_REMOVE_BY_DEFAULT),
     m_effIndex(eff), m_positive(false), m_isPeriodic(false), m_isAreaAura(false),
-    m_isPersistent(false), m_in_use(0), m_spellAuraHolder(holder)
+    m_isPersistent(false), m_in_use(0), m_spellAuraHolder(holder), m_caster(caster)
 {
     MANGOS_ASSERT(target);
     MANGOS_ASSERT(spellproto && spellproto == sSpellTemplate.LookupEntry<SpellEntry>(spellproto->Id) && "`info` must be pointer to sSpellTemplate element");
@@ -638,6 +638,10 @@ bool Aura::isAffectedOnSpell(SpellEntry const* spell) const
 
 bool Aura::CanProcFrom(SpellEntry const* spell, uint32 EventProcEx, uint32 procEx, bool active, bool useClassMask) const
 {
+    // Aura cannot proc from itself unless it is a periodic.
+    if (GetId() == spell->Id && !IsPeriodic())
+        return false;
+
     // Check EffectClassMask (in pre-3.x stored in spell_affect in fact)
     ClassFamilyMask mask = sSpellMgr.GetSpellAffectMask(GetId(), GetEffIndex());
 
@@ -1142,6 +1146,23 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             {
                 switch (GetId())
                 {
+                    // Eye of Kilrogg
+                    // Summons an Eye of Kilrogg and binds your vision to it.
+                    case 126:
+                    {
+                        if (Unit* caster = GetCaster())
+                        {
+                            if (caster->GetTypeId() == TYPEID_PLAYER)
+                            {
+                                if (Pet* guardian = caster->FindGuardianWithEntry(4277))
+                                {
+                                    ((Player*)caster)->ModPossessPet(guardian, false, AURA_REMOVE_BY_DEFAULT);
+                                    guardian->DisappearAndDie();
+                                }
+                            }
+                        }
+                        return;
+                    }
                     case 7057:                              // Haunting Spirits
                         // expected to tick with 30 sec period (tick part see in Aura::PeriodicTick)
                         m_isPeriodic = true;
@@ -2081,6 +2102,59 @@ void Aura::HandleModPossessPet(bool apply, bool Real)
         caster->ResetControlState();
 }
 
+void Player::ModPossessPet(Pet* pet, bool apply, AuraRemoveMode m_removeMode)
+{
+    Player* p_caster = this;
+    Camera& camera = p_caster->GetCamera();
+
+    if (apply)
+    {
+        pet->addUnitState(UNIT_STAT_CONTROLLED);
+
+        // target should became visible at SetView call(if not visible before):
+        // otherwise client\p_caster will ignore packets from the target(SetClientControl for example)
+        camera.SetView(pet);
+
+        p_caster->SetCharm(pet);
+        p_caster->SetMover(pet);
+
+        pet->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+        pet->SetCharmerGuid(p_caster->GetObjectGuid());
+
+        pet->StopMoving();
+        pet->GetMotionMaster()->Clear(false);
+        pet->GetMotionMaster()->MoveIdle();
+        pet->UpdateControl();
+    }
+    else
+    {
+        p_caster->SetCharm(nullptr);
+        p_caster->SetMover(nullptr);
+
+        // there is a possibility that target became invisible for client\p_caster at ResetView call:
+        // it must be called after movement control unapplying, not before! the reason is same as at aura applying
+        camera.ResetView();
+        pet->UpdateControl();
+        pet->SetCharmerGuid(ObjectGuid());
+
+        // On delete only do caster related effects.
+        if (m_removeMode == AURA_REMOVE_BY_DELETE)
+            return;
+
+        pet->clearUnitState(UNIT_STAT_CONTROLLED);
+
+        pet->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+
+        //pet->AttackStop();
+
+        // out of range pet dismissed
+        if (!pet->IsWithinDistInMap(p_caster, 100.0f))
+            p_caster->RemovePet(PET_SAVE_REAGENTS);
+        else if (!pet->isInCombat())
+            pet->GetMotionMaster()->MoveFollow(p_caster, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+    }
+}
+
 void Aura::HandleModCharm(bool apply, bool Real)
 {
     if (!Real)
@@ -2280,6 +2354,10 @@ void Aura::HandleModStealth(bool apply, bool Real)
         // for RACE_NIGHTELF stealth
         if (Real && target->GetTypeId() == TYPEID_PLAYER && GetId() == 20580)
             target->RemoveAurasDueToSpell(21009);
+
+        // Remove vanish buff if player cancels stealth.
+        if (m_removeMode == AURA_REMOVE_BY_CANCEL && target->HasAuraType(SPELL_AURA_MOD_STEALTH))
+            target->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
 
         // only at real aura remove of _last_ SPELL_AURA_MOD_STEALTH
         if (Real && !target->HasAuraType(SPELL_AURA_MOD_STEALTH))
@@ -2513,9 +2591,7 @@ void Aura::HandleAuraModTotalThreat(bool apply, bool Real)
     if (!caster || !caster->isAlive())
         return;
 
-    float threatMod = apply ? float(m_modifier.m_amount) : float(-m_modifier.m_amount);
-
-    target->getHostileRefManager().threatAssist(caster, threatMod, GetSpellProto());
+    target->getHostileRefManager().threatAssist(caster, m_modifier.m_amount, GetSpellProto());
 }
 
 void Aura::HandleModTaunt(bool apply, bool Real)
@@ -4098,6 +4174,12 @@ void Aura::PeriodicTick()
     Unit* target = GetTarget();
     SpellEntry const* spellProto = GetSpellProto();
 
+    // Damage should be recalculated each tick, as it may vary between 2 values.
+    // Example: Drain Life (Rank 1) with Imp does 10 - 11 damage per tick.
+    int32 damage = m_caster ? m_caster->CalculateSpellDamage(target, spellProto, m_effIndex, &m_currentBasePoints) : m_currentBasePoints;
+    SetModifier(AuraType(spellProto->EffectApplyAuraName[m_effIndex]), damage, spellProto->EffectAmplitude[m_effIndex], spellProto->EffectMiscValue[m_effIndex]);
+
+
     switch (m_modifier.m_auraname)
     {
         case SPELL_AURA_PERIODIC_DAMAGE:
@@ -4579,6 +4661,7 @@ void Aura::PeriodicDummyTick()
 {
     SpellEntry const* spell = GetSpellProto();
     Unit* target = GetTarget();
+
     switch (spell->SpellFamilyName)
     {
         case SPELLFAMILY_GENERIC:

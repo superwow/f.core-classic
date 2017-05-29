@@ -1916,6 +1916,37 @@ bool WorldObject::IsControlledByPlayer() const
     }
 }
 
+// Called by Creature::DisappearAndDie
+void WorldObject::DestroyForNearbyPlayers()
+{
+    if (!IsInWorld())
+        return;
+
+    std::list<Player*> targets;
+    MaNGOS::AnyPlayerInObjectRangeCheck check(this, GetMap()->GetVisibilityDistance());
+    MaNGOS::PlayerListSearcher<MaNGOS::AnyPlayerInObjectRangeCheck> searcher(targets, check);
+    Cell::VisitWorldObjects(this, searcher, GetMap()->GetVisibilityDistance());
+    for (std::list<Player*>::const_iterator iter = targets.begin(); iter != targets.end(); ++iter)
+    {
+        Player *plr = (*iter);
+
+        if (plr == this)
+            continue;
+
+        if (!plr->IsInVisibleList_Unsafe(this))
+            continue;
+
+        if (isType(TYPEMASK_UNIT) && ((Unit*)this)->GetCharmerGuid() == plr->GetObjectGuid()) // TODO: this is for puppet
+            continue;
+
+        DestroyForPlayer(plr);
+        plr->m_clientGUIDs.erase(GetGUID());
+
+//        if (this->GetTypeId() == TYPEID_PLAYER && ((Player*)this)->m_broadcaster)
+//            ((Player*)this)->m_broadcaster->RemoveListener(plr);
+    }
+}
+
 bool WorldObject::PrintCoordinatesError(float x, float y, float z, char const* descr) const
 {
     sLog.outError("%s with invalid %s coordinates: mapid = %uu, x = %f, y = %f, z = %f", GetGuidStr().c_str(), descr, GetMapId(), x, y, z);

@@ -732,6 +732,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         void SendAreaSpiritHealerQueryOpcode(Player* pl);
 
+        void DisappearAndDie();
+
         void SetVirtualItem(VirtualItemSlot slot, uint32 item_id);
     protected:
         bool MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* pSpellInfo, uint32 selectFlags) const;

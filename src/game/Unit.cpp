@@ -409,6 +409,9 @@ Unit::Unit() :
     m_isCreatureLinkingTrigger = false;
     m_isSpawningLinked = false;
     m_dummyCombatState = false;
+
+    m_AutoRepeatInterruptCastDelayed = false;
+    m_AutoRepeatInterruptCastInstantly = false;
 }
 
 Unit::~Unit()
@@ -3535,37 +3538,103 @@ void Unit::_UpdateSpells(uint32 time)
 
 void Unit::_UpdateAutoRepeatSpell()
 {
-    // check "realtime" interrupts
-    if ((GetTypeId() == TYPEID_PLAYER && ((Player*)this)->isMoving()) || IsNonMeleeSpellCasted(false, false, true))
+    bool isPlayer = GetTypeId() == TYPEID_PLAYER ? true : false;
+
+    // Check real-time delayed interrupts (no unit action possible or player unit moving)
+    if ((isPlayer && ((Player*)this)->isMoving()) || hasUnitState(UNIT_STAT_CAN_NOT_REACT) || HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED))
     {
-        // cancel wand shoot
-        if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo->Category == 351)
-            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
-        m_AutoRepeatFirstCast = true;
-        return;
+        // interrupt on next check
+        m_AutoRepeatInterruptCastDelayed = true;
     }
-
-    // apply delay
-    if (m_AutoRepeatFirstCast && getAttackTimer(RANGED_ATTACK) < 500)
-        setAttackTimer(RANGED_ATTACK, 500);
-    m_AutoRepeatFirstCast = false;
-
-    // castroutine
-    if (isAttackReady(RANGED_ATTACK))
+    else
     {
-        // Check if able to cast
-        if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->CheckCast(true) != SPELL_CAST_OK)
+        bool spellCast = false;
+        bool channeled = false;
+
+        // Check if spell is currently being channeled
+        if (m_currentSpells[CURRENT_CHANNELED_SPELL])
         {
-            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
-            return;
+            spellCast = true;
+            channeled = true;
+        }
+        else if (m_currentSpells[CURRENT_GENERIC_SPELL])
+            spellCast = true;
+
+        if (spellCast)
+        {
+            bool ranged = channeled ? m_currentSpells[CURRENT_CHANNELED_SPELL]->m_spellInfo->HasAttribute(SPELL_ATTR_RANGED)
+                : m_currentSpells[CURRENT_GENERIC_SPELL]->m_spellInfo->HasAttribute(SPELL_ATTR_RANGED);
+
+        if (ranged) // Apply delay on ranged spell to hunter auto shoot but don't interrupt
+            {
+                m_AutoRepeatFirstCast = true;
+
+                // don't interrupt at all if we've just fired a ranged attack
+                m_AutoRepeatInterruptCastDelayed = false;
+                m_AutoRepeatInterruptCastInstantly = false;
+            }
+            else        // if not ranged attack then interrupt autorepeat immediately
+                m_AutoRepeatInterruptCastInstantly = true;
         }
 
-        // we want to shoot
-        Spell* spell = new Spell(this, m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, true);
-        spell->SpellStart(&(m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets));
+        // if player, check client side target (selection)
+        ObjectGuid targetGuid = isPlayer ? ((Player*)this)->GetSelectionGuid() : GetTargetGuid();
 
-        // all went good, reset attack
-        resetAttackTimer(RANGED_ATTACK);
+        // check the units actual target, if no unit target then just keep current target
+        if (!targetGuid.IsEmpty() && targetGuid.IsUnit())
+        {
+            Unit* unitTarget = GetMap()->GetUnit(targetGuid);
+            // Only do real time target updating if target doesn't remain the same
+            if (unitTarget != m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets.getUnitTarget())
+            {
+                m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets.setUnitTarget(unitTarget);
+
+                // Interrupt immediately on if new target fails the castcheck, and don't allow shooting of yourself.
+                if (unitTarget == this || m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->CheckCast(true) != SPELL_CAST_OK)
+                    m_AutoRepeatInterruptCastInstantly = true;
+                else
+                    m_AutoRepeatFirstCast = true;
+            }
+        }
+    }
+
+    // Handle interrupt by moving, then delay, then finally handle spell itself and regular delayed interrupt.
+    if (m_AutoRepeatInterruptCastInstantly)
+    {
+        InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+        m_AutoRepeatInterruptCastInstantly = false;
+
+        // This one can have gotten applied as well, make sure to nullify.
+        m_AutoRepeatInterruptCastDelayed = false;
+    }
+    else if (m_AutoRepeatFirstCast)
+    {
+        // apply delay
+        if (getAttackTimer(RANGED_ATTACK) < 500)
+            setAttackTimer(RANGED_ATTACK, 500);
+
+        m_AutoRepeatFirstCast = false;
+    }
+    else if (isAttackReady(RANGED_ATTACK))
+    {
+        // Check for delayed interrupt, then check if able to cast
+        if (m_AutoRepeatInterruptCastDelayed)
+        {
+            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+            m_AutoRepeatInterruptCastDelayed = false;
+        }
+        else if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->CheckCast(true) == SPELL_CAST_OK)
+        {
+            // Always stand before shooting, at least players
+            if (isPlayer && getStandState() != UNIT_STAND_STATE_STAND)
+                SetStandState(UNIT_STAND_STATE_STAND);
+
+            Spell* spell = new Spell(this, m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, true);
+            spell->SpellStart(&(m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_targets));
+            resetAttackTimer(RANGED_ATTACK);
+        }
+        else
+            InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     }
 }
 
@@ -6066,11 +6135,19 @@ uint32 Unit::SpellDamageBonusDone(Unit* pVictim, SpellEntry const* spellProto, u
     DoneTotal = SpellBonusWithCoeffs(spellProto, DoneTotal, DoneAdvertisedBenefit, 0, damagetype, true);
 
     float tmpDamage = (int32(pdamage) + DoneTotal * int32(stack)) * DoneTotalMod;
+
     // apply spellmod to Done damage (flat and pct)
     if (Player* modOwner = GetSpellModOwner())
         modOwner->ApplySpellMod(spellProto->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
 
-    return tmpDamage > 0 ? uint32(tmpDamage) : 0;
+    int32 roundedValue = int32(tmpDamage);
+    if (tmpDamage != roundedValue)
+    {
+        // If the value is fractional, randomise rounding up or down.
+        roundedValue = (bool)urand(0, 1) ? ceil(tmpDamage) : floor(tmpDamage);
+    }
+
+    return roundedValue > 0 ? roundedValue : 0;
 }
 
 /**
@@ -7750,7 +7827,7 @@ int32 Unit::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProt
         }
     }
 
-    int32 value = basePoints;
+    float value = float(basePoints);
 
     // random damage
     if (comboDamage != 0.0f && unitPlayer && target && (target->GetObjectGuid() == unitPlayer->GetComboTargetGuid() || IsOnlySelfTargeting(spellProto)))
@@ -7767,10 +7844,19 @@ int32 Unit::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProt
                  spellProto->Effect[effect_index] != SPELL_EFFECT_KNOCK_BACK &&
                  !IsControlledByPlayer())
         {
-            value = int32(value * 0.25f * exp(getLevel() * (70 - spellProto->spellLevel) / 1000.0f));
+            value = value * 0.25f * exp(getLevel() * (70 - spellProto->spellLevel) / 1000.0f);
         }
     }
-    return value;
+
+    int32 roundedValue = int32(value);
+
+    if (value != roundedValue)
+    {
+        // If the value is fractional, randomise rounding up or down.
+        roundedValue = (bool)urand(0, 1) ? ceil(value) : floor(value);
+    }
+
+    return roundedValue;
 }
 
 DiminishingLevels Unit::GetDiminishing(DiminishingGroup group)
@@ -9130,7 +9216,17 @@ void Unit::SetFeignDeath(bool apply, ObjectGuid casterGuid /*= ObjectGuid()*/)
         {
             // restore appropriate movement generator
             if (getVictim())
-                GetMotionMaster()->MoveChase(getVictim());
+                if (IsNonDungeonCritter())
+                {
+                    StopMoving();
+                    GetMotionMaster()->MoveFleeing(getVictim(), 20);
+                    DeleteThreatList();
+                    CombatStop(true);
+                }
+                else
+                {
+                    GetMotionMaster()->MoveChase(getVictim());
+                }
             else
                 GetMotionMaster()->Initialize();
         }
@@ -10191,3 +10287,33 @@ float Unit::GetAttackDistance(Unit const* pl) const
 
     return (RetDistance * aggroRate);
 }
+
+
+void Unit::UpdateControl()
+{
+    // Inform controller
+    if (Unit* charmer = GetCharmer())
+    {
+        if (charmer->GetTypeId() == TYPEID_PLAYER)
+        {
+            Player* charmerPlayer = (Player*)charmer;
+            if (charmerPlayer->GetCharmGuid() == GetObjectGuid())
+                charmerPlayer->SetClientControl(this, !hasUnitState(UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED));
+        }
+    }
+    // Inform myself
+    if (GetTypeId() == TYPEID_PLAYER)
+    {
+        Player* mePlayer = (Player*)this;
+
+        // Possessing someone ?
+        if (Unit* possessed = GetCharm())
+            if (possessed->GetCharmerGuid() == GetObjectGuid())
+            {
+                mePlayer->SetClientControl(possessed, !possessed->hasUnitState(UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED));
+                return;
+            }
+        mePlayer->SetClientControl(mePlayer, !hasUnitState(UNIT_STAT_CONTROLLED | UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED) && !GetCharmerGuid());
+    }
+}
+
