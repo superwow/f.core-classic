@@ -5200,10 +5200,15 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         {
             switch (GetId())
             {
-                // Stoneform (dwarven racial)
-                case 20594:
+                case 20594:                                  // Stoneform (dwarven racial)
                 {
                     spellId1 = 20612;
+                    break;
+                }
+                case 20567:                                  // Ragnaros Submerge Visual
+                {
+                    spellId1 = 21107;
+                    spellId2 = 21859;
                     break;
                 }
                 default:
